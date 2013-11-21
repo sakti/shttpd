@@ -20,18 +20,19 @@ struct http_request_data {
     char *body;
 };
 
-int split_lines(char *buffer, char **output, int max_size)
+int split_lines(char *token, char *buffer, char **output, int max_size)
 {
     char *tok = NULL;
     int count = 0;
 
-    tok = strtok(buffer, "\n");
+    tok = strtok(buffer, token);
+
     while (tok != NULL)
     {
         if (count > max_size - 1) break;
         output[count] = tok;
         count++;
-        tok = strtok(NULL, "\n");
+        tok = strtok(NULL, token);
     }
     return count;
 }
@@ -41,10 +42,14 @@ http_request parse_http_request(ssize_t len, char *buffer)
     http_request tmp;
     int max_size = 100;
     char *lines[max_size];
+    char *line[max_size];
 
-    split_lines(buffer, lines, max_size);
-
-    tmp.path = lines[0];
+    split_lines("\n", buffer, lines, max_size);
+    puts(lines[0]);
+    split_lines(" ", lines[0], line, max_size);
+    tmp.method = line[0];
+    tmp.path = line[1];
+    tmp.http_version = line[2];
     tmp.len = len;
     return tmp;
 }
@@ -56,6 +61,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in server, client;
     char buffer[10000];
     ssize_t msglen;
+    int http_port = 8000;
 
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd == -1)
@@ -71,14 +77,14 @@ int main(int argc, char *argv[])
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8000);
+    server.sin_port = htons(http_port);
 
     if (bind(socket_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
     {
         puts("Error bind port");
         return -2;
     }
-    puts("Bind port done");
+    printf("Bind port %d done\n", http_port);
 
     listen(socket_fd, 3);
     puts("Waiting client connection");
@@ -95,7 +101,9 @@ int main(int argc, char *argv[])
             puts("Error recv");
         }else{
             request = parse_http_request(msglen, buffer);
+            puts(request.method);
             puts(request.path);
+            puts(request.http_version);
         }
 
         send(client_socket, response, strlen(response), 0);
